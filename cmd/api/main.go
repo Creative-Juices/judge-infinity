@@ -1,6 +1,7 @@
 package main
 
 import (
+	"judgeinf/internal/models"
 	"os"
 	"time"
 
@@ -29,13 +30,23 @@ func main() {
 }
 
 func bindRoutes(r fiber.Router) {
-	r.Post("/questions/create", createQuestion)
+	r.Post("/questions/createOrUpdate", createQuestion)
 	r.Get("/submissions/:submissionId/status", getSubmissionStatus)
 	r.Post("/submissions/submit/:questionId", makeSubmission)
 }
 
 func createQuestion(c *fiber.Ctx) error {
-	panic("Unimplemented")
+	var question models.Question
+	if err := c.BodyParser(&question); err != nil {
+		c.SendString("Unexpected error")
+		panic(err)
+	}
+	if err := c.JSON(question); err != nil {
+		c.SendString("Unexpected error")
+		panic(err)
+	}
+
+	return nil
 }
 
 func getSubmissionStatus(c *fiber.Ctx) error {

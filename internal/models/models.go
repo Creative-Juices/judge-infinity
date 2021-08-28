@@ -5,8 +5,8 @@ import (
 )
 
 type Question struct {
-	QuestionID          uuid.UUID `json:"question_id"`
-	TimeLimitMultiplier int       `json:"time_limit_multiplier"`
+	QuestionID          uuid.UUID `json:"question_id,omitempty"`
+	TimeLimitMultiplier int       `json:"time_limit_multiplier,omitempty"`
 	Testcases           []string  `json:"testcases,omitempty"`
 }
 
