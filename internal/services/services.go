@@ -8,18 +8,18 @@ import (
 )
 
 type Queue interface {
-	PushRequestToQueue(SubmissionID uuid.UUID)
+	PushRequestToQueue(SubmissionID uuid.UUID) error
 }
 
 type Table interface {
-	PushRequestMetadataToTable(CodeSubmission models.CodeSubmission)
-	FetchRequestMetadataFromTable(SubmissionID uuid.UUID) models.CodeSubmission
-	PushQuestionMetadataToTable(Question models.Question)
-	FetchQuestionMetadataToTable(QuestionID uuid.UUID) models.Question
-	PushResultsToTable(SubmissionResult models.SubmissionResult)
-	FetchResultsFromTable(SubmissionID uuid.UUID) models.SubmissionResult
+	PushRequestMetadataToTable(CodeSubmission models.CodeSubmission) error
+	FetchRequestMetadataFromTable(SubmissionID uuid.UUID) (models.CodeSubmission, error)
+	PushQuestionMetadataToTable(Question models.Question) error
+	FetchQuestionMetadataToTable(QuestionID uuid.UUID) (models.Question, error)
+	PushResultsToTable(SubmissionResult models.SubmissionResult) error
+	FetchResultsFromTable(SubmissionID uuid.UUID) (models.SubmissionResult, error)
 }
 
 type Storage interface {
-	PushTestcaseToStorage(Testcase io.Reader)
+	PushTestcaseToStorage(Testcase io.Reader) error
 }
