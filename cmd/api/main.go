@@ -1,8 +1,12 @@
 package main
 
 import (
+	"archive/zip"
 	"judgeinf/internal/models"
+	"judgeinf/internal/services"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -18,6 +22,7 @@ func main() {
 
 	api := app.Group("/api/v1")
 
+	InitServices()
 	InitLogger()
 
 	bindRoutes(api)
@@ -30,20 +35,78 @@ func main() {
 }
 
 func bindRoutes(r fiber.Router) {
-	r.Post("/questions/createOrUpdate", createQuestion)
+	r.Post("/questions/createOrUpdate", createOrUpdateQuestion)
 	r.Get("/submissions/:submissionId/status", getSubmissionStatus)
 	r.Post("/submissions/submit/:questionId", makeSubmission)
 }
 
-func createQuestion(c *fiber.Ctx) error {
+func createOrUpdateQuestion(c *fiber.Ctx) error {
 	var question models.Question
-	if err := c.BodyParser(&question); err != nil {
-		c.SendString("Unexpected error")
-		panic(err)
+	var questionId uuid.UUID
+	var timeLimitMultiplier int
+	var err error
+
+	questionIdStr := strings.TrimSpace(c.FormValue("question_id"))
+	timeLimitMultiplierStr := strings.TrimSpace(c.FormValue("time_limit_multiplier"))
+
+	if len(questionIdStr) > 0 {
+		questionId, err = uuid.Parse(questionIdStr)
+		if err != nil {
+			c.SendString("Unexpected error")
+			return err
+		}
+	} else {
+		questionId = uuid.New()
 	}
+	question.QuestionID = questionId
+
+	if len(timeLimitMultiplierStr) > 0 {
+		timeLimitMultiplier, err = strconv.Atoi(timeLimitMultiplierStr)
+		if err != nil {
+			c.SendString("Unexpected error")
+			return err
+		}
+	} else {
+		timeLimitMultiplier = 1
+	}
+	question.TimeLimitMultiplier = timeLimitMultiplier
+
+	testcasesZip, err := c.FormFile("testcases")
+	if err != nil {
+		c.SendString("Unexpected error")
+		return err
+	}
+
+	testcasesZipFile, err := testcasesZip.Open()
+	if err != nil {
+		c.SendString("Unexpected error")
+		return err
+	}
+
+	testcasesZipFileReader, err := zip.NewReader(testcasesZipFile, testcasesZip.Size)
+	if err != nil {
+		c.SendString("Unexpected error")
+		return err
+	}
+
+	testcaseFiles, err := services.StorageInstance.PushTestcasesToStorage(testcasesZipFileReader.File, question.QuestionID)
+	if err != nil {
+		c.SendString("Unexpected error")
+		return err
+	}
+	question.Testcases = testcaseFiles
+
+	log.Logger.Print(question)
+
+	err = services.TableInstance.PushQuestionMetadataToTable(question)
+	if err != nil {
+		c.SendString("Unexpected error")
+		return err
+	}
+
 	if err := c.JSON(question); err != nil {
 		c.SendString("Unexpected error")
-		panic(err)
+		return err
 	}
 
 	return nil
@@ -51,7 +114,6 @@ func createQuestion(c *fiber.Ctx) error {
 
 func getSubmissionStatus(c *fiber.Ctx) error {
 	panic("Unimplemented")
-
 }
 
 func makeSubmission(c *fiber.Ctx) error {
@@ -61,6 +123,27 @@ func makeSubmission(c *fiber.Ctx) error {
 const (
 	requestIdKey = "requestId"
 )
+
+func InitServices() {
+	queue, err := services.NewQueue()
+	if err != nil {
+		panic(err)
+	}
+
+	table, err := services.NewTable()
+	if err != nil {
+		panic(err)
+	}
+
+	storage, err := services.NewStorage()
+	if err != nil {
+		panic(err)
+	}
+
+	services.QueueInstance = queue
+	services.TableInstance = table
+	services.StorageInstance = storage
+}
 
 func InitLogger() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})

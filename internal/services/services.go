@@ -1,8 +1,9 @@
 package services
 
 import (
-	"io"
+	"archive/zip"
 	"judgeinf/internal/models"
+	"judgeinf/internal/services/azure"
 
 	"github.com/google/uuid"
 )
@@ -21,5 +22,23 @@ type Table interface {
 }
 
 type Storage interface {
-	PushTestcaseToStorage(Testcase io.Reader) error
+	PushTestcasesToStorage(Testcases []*zip.File, QuestionID uuid.UUID) ([]string, error)
 }
+
+func NewQueue() (Queue, error) {
+	return azure.NewAzureQueue()
+}
+
+func NewTable() (Table, error) {
+	return azure.NewAzureTable()
+}
+
+func NewStorage() (Storage, error) {
+	return azure.NewAzureStorage()
+}
+
+var (
+	QueueInstance   Queue
+	TableInstance   Table
+	StorageInstance Storage
+)
