@@ -13,12 +13,12 @@ type Queue interface {
 }
 
 type Table interface {
-	PushRequestMetadataToTable(CodeSubmission models.CodeSubmission) error
-	FetchRequestMetadataFromTable(SubmissionID uuid.UUID) (models.CodeSubmission, error)
-	PushQuestionMetadataToTable(Question models.Question) error
-	FetchQuestionMetadataToTable(QuestionID uuid.UUID) (models.Question, error)
-	PushResultsToTable(SubmissionResult models.SubmissionResult) error
-	FetchResultsFromTable(SubmissionID uuid.UUID) (models.SubmissionResult, error)
+	PushRequestMetadataToTable(CodeSubmission *models.CodeSubmission) error
+	FetchRequestMetadataFromTable(SubmissionID uuid.UUID) (*models.CodeSubmission, error)
+	PushQuestionMetadataToTable(Question *models.Question) error
+	FetchQuestionMetadataFromTable(QuestionID uuid.UUID) (*models.Question, error)
+	PushResultsToTable(SubmissionResult *models.SubmissionResult) error
+	FetchResultsFromTable(SubmissionID uuid.UUID) (*models.SubmissionResult, error)
 }
 
 type Storage interface {

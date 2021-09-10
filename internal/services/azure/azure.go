@@ -19,6 +19,7 @@ var resultsTable = "results"
 var testcaseStorageContainer = "testcases"
 var inputPrefix = "input/"
 var outputPrefix = "output/"
+var entityFetchTimeout = uint(30)
 
 type AzureQueue struct {
 	SubmissionQueue *storage.Queue
@@ -41,7 +42,7 @@ func NewAzureQueue() (*AzureQueue, error) {
 }
 
 func (azureQueue *AzureQueue) PushRequestToQueue(SubmissionID uuid.UUID) error {
-	return nil
+	return azureQueue.SubmissionQueue.GetMessageReference(SubmissionID.String()).Put(&storage.PutMessageOptions{})
 }
 
 type AzureTable struct {
@@ -68,15 +69,49 @@ func NewAzureTable() (*AzureTable, error) {
 	return azureTable, nil
 }
 
-func (azureTable *AzureTable) PushRequestMetadataToTable(CodeSubmission models.CodeSubmission) error {
-	return nil
+func (azureTable *AzureTable) PushRequestMetadataToTable(CodeSubmission *models.CodeSubmission) error {
+	submissionIdStr := CodeSubmission.SubmissionID.String()
+	languageIdStr := CodeSubmission.LanguageID.String()
+	questionIdStr := CodeSubmission.QuestionID.String()
+
+	entity := azureTable.RequestMetadata.GetEntityReference(submissionIdStr, submissionIdStr)
+
+	props := map[string]interface{}{
+		"SourceCode":   CodeSubmission.SourceCode,
+		"LanguageID":   languageIdStr,
+		"QuestionID":   questionIdStr,
+		"CallbackUrl":  CodeSubmission.CallbackUrl,
+		"ResponseMode": CodeSubmission.ResponseMode,
+		"SubmissionID": submissionIdStr,
+	}
+	entity.Properties = props
+
+	return entity.InsertOrReplace(nil)
 }
 
-func (azureTable *AzureTable) FetchRequestMetadataFromTable(SubmissionID uuid.UUID) (models.CodeSubmission, error) {
-	return models.CodeSubmission{}, nil
+func (azureTable *AzureTable) FetchRequestMetadataFromTable(SubmissionID uuid.UUID) (*models.CodeSubmission, error) {
+	submission := &models.CodeSubmission{}
+	submissionIdStr := SubmissionID.String()
+
+	entity := azureTable.RequestMetadata.GetEntityReference(submissionIdStr, submissionIdStr)
+
+	if err := entity.Get(entityFetchTimeout, storage.NoMetadata, nil); err != nil {
+		return nil, err
+	}
+
+	entityAsJson, err := json.Marshal(entity.Properties)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(entityAsJson, submission); err != nil {
+		return nil, err
+	}
+
+	return submission, nil
 }
 
-func (azureTable *AzureTable) PushQuestionMetadataToTable(Question models.Question) error {
+func (azureTable *AzureTable) PushQuestionMetadataToTable(Question *models.Question) error {
 	questionIdStr := Question.QuestionID.String()
 
 	entity := azureTable.QuestionMetadata.GetEntityReference(questionIdStr, questionIdStr)
@@ -93,20 +128,90 @@ func (azureTable *AzureTable) PushQuestionMetadataToTable(Question models.Questi
 	}
 	entity.Properties = props
 
-	err = entity.InsertOrReplace(&storage.EntityOptions{})
-	return err
+	return entity.InsertOrReplace(nil)
 }
 
-func (azureTable *AzureTable) FetchQuestionMetadataToTable(QuestionID uuid.UUID) (models.Question, error) {
-	return models.Question{}, nil
+func (azureTable *AzureTable) FetchQuestionMetadataFromTable(QuestionID uuid.UUID) (*models.Question, error) {
+	questionIdStr := QuestionID.String()
+	question := &models.Question{}
+
+	entity := azureTable.QuestionMetadata.GetEntityReference(questionIdStr, questionIdStr)
+
+	if err := entity.Get(entityFetchTimeout, storage.NoMetadata, nil); err != nil {
+		return nil, err
+	}
+
+	/*if value, ok := entity.Properties["QuestionID"]; !ok {
+		return nil, errors.New("question not found in table")
+	} else if questionId, err := uuid.Parse(fmt.Sprintf("%v", value)); err != nil {
+		return nil, err
+	} else {
+		question.QuestionID = questionId
+	}
+
+	if value, ok := entity.Properties["TimeLimitMultiplier"]; !ok {
+		return nil, errors.New("question not found in table")
+	} else if timeLimitMultiplier, err := strconv.Atoi(fmt.Sprintf("%v", value)); err != nil {
+		return nil, err
+	} else {
+		question.TimeLimitMultiplier = timeLimitMultiplier
+	}
+
+	if value, ok := entity.Properties["Testcases"]; !ok {
+		return nil, errors.New("question not found in table")
+	} else if err := json.Unmarshal([]byte(fmt.Sprintf("%v", value)), &(question.Testcases)); err != nil {
+		return nil, err
+	}*/
+
+	entityAsJson, err := json.Marshal(entity.Properties)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(entityAsJson, question); err != nil {
+		return nil, err
+	}
+
+	fmt.Println("Parsed question from table")
+	fmt.Println(question)
+
+	return question, nil
 }
 
-func (azureTable *AzureTable) PushResultsToTable(SubmissionResult models.SubmissionResult) error {
-	return nil
+func (azureTable *AzureTable) PushResultsToTable(SubmissionResult *models.SubmissionResult) error {
+	submissionIdStr := SubmissionResult.SubmissionID.String()
+
+	entity := azureTable.Results.GetEntityReference(submissionIdStr, submissionIdStr)
+
+	props := map[string]interface{}{
+		"SubmissionID": submissionIdStr,
+		"Verdicts":     SubmissionResult.Verdicts,
+	}
+	entity.Properties = props
+
+	return entity.InsertOrReplace(nil)
 }
 
-func (azureTable *AzureTable) FetchResultsFromTable(SubmissionID uuid.UUID) (models.SubmissionResult, error) {
-	return models.SubmissionResult{}, nil
+func (azureTable *AzureTable) FetchResultsFromTable(SubmissionID uuid.UUID) (*models.SubmissionResult, error) {
+	submissionIdStr := SubmissionID.String()
+	submissionResult := &models.SubmissionResult{}
+
+	entity := azureTable.Results.GetEntityReference(submissionIdStr, submissionIdStr)
+
+	if err := entity.Get(entityFetchTimeout, storage.NoMetadata, nil); err != nil {
+		return nil, err
+	}
+
+	entityAsJson, err := json.Marshal(entity.Properties)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(entityAsJson, submissionResult); err != nil {
+		return nil, err
+	}
+
+	return submissionResult, nil
 }
 
 type AzureStorage struct {
@@ -131,7 +236,7 @@ func NewAzureStorage() (*AzureStorage, error) {
 
 func (azureStorage *AzureStorage) PushTestcasesToStorage(Testcases []*zip.File, QuestionID uuid.UUID) ([]string, error) {
 	inputFilesFound := make(map[string]*zip.File)
-	var testcases []string
+	testcases := []string{}
 	questionIdStr := QuestionID.String()
 
 	for _, file := range Testcases {
@@ -155,20 +260,20 @@ func (azureStorage *AzureStorage) PushTestcasesToStorage(Testcases []*zip.File, 
 
 				testcaseInputFileReader, err := inputFile.Open()
 				if err != nil {
-					return []string{}, err
+					return nil, err
 				}
 				testcaseOutputFileReader, err := file.Open()
 				if err != nil {
-					return []string{}, err
+					return nil, err
 				}
 
-				err = testcaseInputFileBlobRef.CreateBlockBlobFromReader(testcaseInputFileReader, &storage.PutBlobOptions{})
+				err = testcaseInputFileBlobRef.CreateBlockBlobFromReader(testcaseInputFileReader, nil)
 				if err != nil {
-					return []string{}, err
+					return nil, err
 				}
-				err = testcaseOutputFileBlobRef.CreateBlockBlobFromReader(testcaseOutputFileReader, &storage.PutBlobOptions{})
+				err = testcaseOutputFileBlobRef.CreateBlockBlobFromReader(testcaseOutputFileReader, nil)
 				if err != nil {
-					return []string{}, err
+					return nil, err
 				}
 
 				testcases = append(testcases, fileName)

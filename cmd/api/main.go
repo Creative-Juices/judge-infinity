@@ -37,11 +37,11 @@ func main() {
 func bindRoutes(r fiber.Router) {
 	r.Post("/questions/createOrUpdate", createOrUpdateQuestion)
 	r.Get("/submissions/:submissionId/status", getSubmissionStatus)
-	r.Post("/submissions/submit/:questionId", makeSubmission)
+	r.Post("/submissions/submit", makeSubmission)
 }
 
 func createOrUpdateQuestion(c *fiber.Ctx) error {
-	var question models.Question
+	question := &models.Question{}
 	var questionId uuid.UUID
 	var timeLimitMultiplier int
 	var err error
@@ -96,6 +96,8 @@ func createOrUpdateQuestion(c *fiber.Ctx) error {
 	}
 	question.Testcases = testcaseFiles
 
+	services.TableInstance.FetchQuestionMetadataFromTable(question.QuestionID)
+
 	log.Logger.Print(question)
 
 	err = services.TableInstance.PushQuestionMetadataToTable(question)
@@ -117,7 +119,29 @@ func getSubmissionStatus(c *fiber.Ctx) error {
 }
 
 func makeSubmission(c *fiber.Ctx) error {
-	panic("Unimplemented")
+	submission := &models.CodeSubmission{}
+	response := &models.StandardResponse{}
+
+	if err := c.BodyParser(submission); err != nil {
+		c.SendString("Unexpected error")
+		return err
+	}
+
+	submission.SubmissionID = uuid.New()
+	if err := services.QueueInstance.PushRequestToQueue(submission.SubmissionID); err != nil {
+		c.SendString("Unexpected error")
+		return err
+	}
+
+	response.Success = true
+	response.Message = "done"
+	response.Value = submission.SubmissionID
+	if err := c.JSON(response); err != nil {
+		c.SendString("Unexpected error")
+		return err
+	}
+
+	return nil
 }
 
 const (
