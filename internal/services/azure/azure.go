@@ -2,16 +2,21 @@ package azure
 
 import (
 	"archive/zip"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"judgeinf/internal/models"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/google/uuid"
 )
 
-var storageConnectionString = ""
+var storageConnectionString = os.Getenv("AzureWebJobsStorage")
+
+//var storageConnectionString = ""
 var submissionQueueName = "submissionqueue"
 var requestMetadataTable = "requestmetadata"
 var questionMetadataTable = "questionmetadata"
@@ -42,7 +47,8 @@ func NewAzureQueue() (*AzureQueue, error) {
 }
 
 func (azureQueue *AzureQueue) PushRequestToQueue(SubmissionID uuid.UUID) error {
-	return azureQueue.SubmissionQueue.GetMessageReference(SubmissionID.String()).Put(&storage.PutMessageOptions{})
+	submissionIdBase64 := base64.StdEncoding.EncodeToString([]byte(SubmissionID.String()))
+	return azureQueue.SubmissionQueue.GetMessageReference(submissionIdBase64).Put(&storage.PutMessageOptions{})
 }
 
 type AzureTable struct {
@@ -71,14 +77,14 @@ func NewAzureTable() (*AzureTable, error) {
 
 func (azureTable *AzureTable) PushRequestMetadataToTable(CodeSubmission *models.CodeSubmission) error {
 	submissionIdStr := CodeSubmission.SubmissionID.String()
-	languageIdStr := CodeSubmission.LanguageID.String()
+	languageIdStr := CodeSubmission.Language
 	questionIdStr := CodeSubmission.QuestionID.String()
 
 	entity := azureTable.RequestMetadata.GetEntityReference(submissionIdStr, submissionIdStr)
 
 	props := map[string]interface{}{
 		"SourceCode":   CodeSubmission.SourceCode,
-		"LanguageID":   languageIdStr,
+		"Language":     languageIdStr,
 		"QuestionID":   questionIdStr,
 		"CallbackUrl":  CodeSubmission.CallbackUrl,
 		"ResponseMode": CodeSubmission.ResponseMode,
@@ -99,13 +105,23 @@ func (azureTable *AzureTable) FetchRequestMetadataFromTable(SubmissionID uuid.UU
 		return nil, err
 	}
 
-	entityAsJson, err := json.Marshal(entity.Properties)
-	if err != nil {
+	submission.SourceCode = fmt.Sprintf("%v", entity.Properties["SourceCode"])
+	submission.Language = models.Language(fmt.Sprintf("%v", entity.Properties["Language"]))
+	if questionId, err := uuid.Parse(fmt.Sprintf("%v", entity.Properties["QuestionID"])); err != nil {
 		return nil, err
+	} else {
+		submission.QuestionID = questionId
 	}
-
-	if err := json.Unmarshal(entityAsJson, submission); err != nil {
+	submission.CallbackUrl = fmt.Sprintf("%v", entity.Properties["CallbackUrl"])
+	if responseMode, err := strconv.Atoi(fmt.Sprintf("%v", entity.Properties["ResponseMode"])); err != nil {
 		return nil, err
+	} else {
+		submission.ResponseMode = models.ResponseModeType(responseMode)
+	}
+	if submissionId, err := uuid.Parse(fmt.Sprintf("%v", entity.Properties["SubmissionID"])); err != nil {
+		return nil, err
+	} else {
+		submission.SubmissionID = submissionId
 	}
 
 	return submission, nil
@@ -141,39 +157,21 @@ func (azureTable *AzureTable) FetchQuestionMetadataFromTable(QuestionID uuid.UUI
 		return nil, err
 	}
 
-	/*if value, ok := entity.Properties["QuestionID"]; !ok {
-		return nil, errors.New("question not found in table")
-	} else if questionId, err := uuid.Parse(fmt.Sprintf("%v", value)); err != nil {
+	if questionId, err := uuid.Parse(fmt.Sprintf("%v", entity.Properties["QuestionID"])); err != nil {
 		return nil, err
 	} else {
 		question.QuestionID = questionId
 	}
 
-	if value, ok := entity.Properties["TimeLimitMultiplier"]; !ok {
-		return nil, errors.New("question not found in table")
-	} else if timeLimitMultiplier, err := strconv.Atoi(fmt.Sprintf("%v", value)); err != nil {
+	if timeLimitMultiplier, err := strconv.Atoi(fmt.Sprintf("%v", entity.Properties["TimeLimitMultiplier"])); err != nil {
 		return nil, err
 	} else {
 		question.TimeLimitMultiplier = timeLimitMultiplier
 	}
 
-	if value, ok := entity.Properties["Testcases"]; !ok {
-		return nil, errors.New("question not found in table")
-	} else if err := json.Unmarshal([]byte(fmt.Sprintf("%v", value)), &(question.Testcases)); err != nil {
-		return nil, err
-	}*/
-
-	entityAsJson, err := json.Marshal(entity.Properties)
-	if err != nil {
+	if err := json.Unmarshal([]byte(fmt.Sprintf("%v", entity.Properties["Testcases"])), &(question.Testcases)); err != nil {
 		return nil, err
 	}
-
-	if err := json.Unmarshal(entityAsJson, question); err != nil {
-		return nil, err
-	}
-
-	fmt.Println("Parsed question from table")
-	fmt.Println(question)
 
 	return question, nil
 }
@@ -202,12 +200,12 @@ func (azureTable *AzureTable) FetchResultsFromTable(SubmissionID uuid.UUID) (*mo
 		return nil, err
 	}
 
-	entityAsJson, err := json.Marshal(entity.Properties)
-	if err != nil {
+	if submissionId, err := uuid.Parse(fmt.Sprintf("%v", entity.Properties["SubmissionID"])); err != nil {
 		return nil, err
+	} else {
+		submissionResult.SubmissionID = submissionId
 	}
-
-	if err := json.Unmarshal(entityAsJson, submissionResult); err != nil {
+	if err := json.Unmarshal([]byte(fmt.Sprintf("%v", entity.Properties["Verdicts"])), &(submissionResult.Verdicts)); err != nil {
 		return nil, err
 	}
 

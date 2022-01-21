@@ -1,0 +1,11 @@
+{
+    "python": {
+        "target_filename": "main.py"
+    },
+    "java": {
+        "target_filename": "Main.java"
+    },
+    "cpp": {
+        "target_filename": "main.cpp"
+    }
+}

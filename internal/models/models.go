@@ -17,9 +17,17 @@ const (
 	AfterAllTestcases ResponseModeType = 1
 )
 
+type Language string
+
+const (
+	Python Language = "python"
+	Java   Language = "java"
+	CPP    Language = "cpp"
+)
+
 type CodeSubmission struct {
 	SourceCode   string           `json:"source_code"`
-	LanguageID   uuid.UUID        `json:"language_id"`
+	Language     Language         `json:"language"`
 	QuestionID   uuid.UUID        `json:"question_id"`
 	CallbackUrl  string           `json:"callback_url"`
 	ResponseMode ResponseModeType `json:"response_mode_type"`
@@ -51,4 +59,8 @@ const (
 type SubmissionResult struct {
 	SubmissionID uuid.UUID                  `json:"submission_id"`
 	Verdicts     map[string]TestcaseVerdict `json:"verdicts"`
+}
+
+type LanguageInfo struct {
+	TargetFilename string `json:"target_filename"`
 }

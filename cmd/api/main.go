@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"errors"
 	"judgeinf/internal/models"
 	"judgeinf/internal/services"
 	"os"
@@ -96,8 +97,6 @@ func createOrUpdateQuestion(c *fiber.Ctx) error {
 	}
 	question.Testcases = testcaseFiles
 
-	services.TableInstance.FetchQuestionMetadataFromTable(question.QuestionID)
-
 	log.Logger.Print(question)
 
 	err = services.TableInstance.PushQuestionMetadataToTable(question)
@@ -115,7 +114,30 @@ func createOrUpdateQuestion(c *fiber.Ctx) error {
 }
 
 func getSubmissionStatus(c *fiber.Ctx) error {
-	panic("Unimplemented")
+	submissionIdStr := c.Params("submissionId")
+	if submissionIdStr == "" {
+		c.SendString("Invalid request")
+		return errors.New("invalid request")
+	}
+
+	submissionId, err := uuid.Parse(submissionIdStr)
+	if err != nil {
+		c.SendString("Invalid request")
+		return err
+	}
+
+	submission, err := services.TableInstance.FetchResultsFromTable(submissionId)
+	if err != nil {
+		c.SendString("Invalid request")
+		return err
+	}
+
+	if err := c.JSON(submission); err != nil {
+		c.SendString("Invalid request")
+		return err
+	}
+
+	return nil
 }
 
 func makeSubmission(c *fiber.Ctx) error {
@@ -128,6 +150,10 @@ func makeSubmission(c *fiber.Ctx) error {
 	}
 
 	submission.SubmissionID = uuid.New()
+	if err := services.TableInstance.PushRequestMetadataToTable(submission); err != nil {
+		c.SendString("Unexpected error")
+		return err
+	}
 	if err := services.QueueInstance.PushRequestToQueue(submission.SubmissionID); err != nil {
 		c.SendString("Unexpected error")
 		return err
@@ -164,9 +190,15 @@ func InitServices() {
 		panic(err)
 	}
 
+	languageData, err := services.NewLanguageData()
+	if err != nil {
+		panic(err)
+	}
+
 	services.QueueInstance = queue
 	services.TableInstance = table
 	services.StorageInstance = storage
+	services.LanguageData = languageData
 }
 
 func InitLogger() {

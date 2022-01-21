@@ -1,0 +1,17 @@
+version: "3"
+
+services:
+  func:
+    environment:
+      AzureWebJobsScriptRoot: /home/site/wwwroot
+      AzureFunctionsJobHost__Logging__Console__IsEnabled: true
+    image: aakash10399/judgeinfinityazureprocessor
+    ports:
+      - 7071:80
+    restart: always
+    networks:
+      - network
+
+networks:
+  network:
+    driver: bridge

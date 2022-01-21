@@ -37,8 +37,27 @@ func NewStorage() (Storage, error) {
 	return azure.NewAzureStorage()
 }
 
+func NewLanguageData() (map[models.Language]models.LanguageInfo, error) {
+	languageData := map[models.Language]models.LanguageInfo{}
+
+	languageData[models.Python] = models.LanguageInfo{
+		TargetFilename: "main.py",
+	}
+
+	languageData[models.Java] = models.LanguageInfo{
+		TargetFilename: "Main.java",
+	}
+
+	languageData[models.CPP] = models.LanguageInfo{
+		TargetFilename: "main.cpp",
+	}
+
+	return languageData, nil
+}
+
 var (
 	QueueInstance   Queue
 	TableInstance   Table
 	StorageInstance Storage
+	LanguageData    map[models.Language]models.LanguageInfo
 )
